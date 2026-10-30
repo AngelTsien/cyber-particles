@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000">
+<link rel="icon" href="data:,">
+<title>NEON//PARTICLES · 手势粒子</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+/* ===== 赛博朋克主题变量 ===== */
+:root{--c:#00f0ff;--m:#ff2bd6;--y:#f5ff3b;--bg:rgba(4,8,16,.55);--f:'Share Tech Mono',ui-monospace,monospace}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#000;color:var(--c);font-family:var(--f);overflow:hidden;touch-action:none;user-select:none}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+/* 扫描线 + 暗角 */
+#scan{position:fixed;inset:0;pointer-events:none;z-index:5;background:repeating-linear-gradient(0deg,rgba(0,0,0,.0) 0 2px,rgba(0,240,255,.045) 2px 3px);mix-blend-mode:screen}
+#vig{position:fixed;inset:0;pointer-events:none;z-index:4;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.75))}
+/* 场景切换故障闪烁 */
+#glitch{position:fixed;inset:0;pointer-events:none;z-index:6;opacity:0}
+#glitch.on{animation:gl .45s steps(6)}
+@keyframes gl{0%{opacity:1;background:linear-gradient(transparent 20%,rgba(255,43,214,.25) 21% 24%,transparent 25% 60%,rgba(0,240,255,.3) 61% 63%,transparent 64%);transform:translateX(-6px)}50%{opacity:.8;transform:translateX(5px)}100%{opacity:0;transform:none}}
+.hud{position:fixed;z-index:10;pointer-events:none}
+.panel{background:var(--bg);border:1px solid rgba(0,240,255,.45);box-shadow:0 0 12px rgba(0,240,255,.25),inset 0 0 10px rgba(255,43,214,.08);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);pointer-events:auto}
+/* 角括号 */
+.panel::before,.panel::after{content:"";position:absolute;width:10px;height:10px;border:2px solid var(--m)}
+.panel::before{left:-3px;top:-3px;border-right:0;border-bottom:0}
+.panel::after{right:-3px;bottom:-3px;border-left:0;border-top:0}
+#title{top:calc(10px + env(safe-area-inset-top));left:12px;font-family:Orbitron,var(--f);font-weight:800;font-size:15px;letter-spacing:3px;text-shadow:0 0 8px var(--c),2px 0 var(--m);animation:fl 4s infinite}
+@keyframes fl{0%,92%,100%{opacity:1}93%{opacity:.3}95%{opacity:1}97%{opacity:.5}}
+#stat{top:calc(32px + env(safe-area-inset-top));left:12px;font-size:11px;line-height:1.5;color:#8ff;text-shadow:0 0 4px var(--c)}
+#stat b{color:var(--m);font-weight:400}
+#bar{bottom:calc(10px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;gap:6px;padding:6px 8px;flex-wrap:wrap;justify-content:center;max-width:96vw}
+button,select,.btn{font-family:var(--f);font-size:12px;color:var(--c);background:rgba(0,20,30,.6);border:1px solid rgba(0,240,255,.5);padding:6px 9px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:.15s;border-radius:0}
+button:hover,button.act{background:rgba(255,43,214,.25);border-color:var(--m);color:#fff;box-shadow:0 0 10px var(--m)}
+select{appearance:none;-webkit-appearance:none;padding-right:18px}
+option{background:#020a12}
+input[type=color]{width:34px;height:30px;padding:0;border:1px solid var(--m);background:none;cursor:pointer}
+#cam{top:calc(10px + env(safe-area-inset-top));right:12px;width:132px;height:99px;padding:0;overflow:hidden}
+#cam canvas{width:100%;height:100%;display:block}
+#camlbl{position:absolute;left:4px;bottom:2px;font-size:9px;color:var(--y);text-shadow:0 0 4px #000}
+#set{top:calc(118px + env(safe-area-inset-top));right:12px;width:248px;max-height:calc(100% - 190px);overflow:auto;padding:10px 12px;font-size:11px;display:none}
+#set.open{display:block;animation:gl2 .3s}
+@keyframes gl2{0%{opacity:0;transform:skewX(8deg)}60%{opacity:1;transform:skewX(-3deg)}100%{transform:none}}
+#set h3{margin:0 0 8px;font:800 12px Orbitron;letter-spacing:2px;color:var(--m);text-shadow:0 0 6px var(--m)}
+#set label{display:block;margin:7px 0 2px;color:#9ff}
+#set label span{float:right;color:var(--y)}
+input[type=range]{width:100%;accent-color:var(--m);height:16px}
+#set .row{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+#set input[type=text]{width:100%;background:#011;border:1px solid var(--c);color:var(--c);font-family:var(--f);padding:5px}
+#toast{top:45%;left:50%;transform:translate(-50%,-50%);font:800 20px Orbitron,var(--f);letter-spacing:4px;color:#fff;text-shadow:0 0 10px var(--m),3px 0 var(--c),-3px 0 var(--m);opacity:0;transition:opacity .3s;text-align:center;white-space:nowrap}
+#toast.on{opacity:1}
+#help{bottom:calc(62px + env(safe-area-inset-bottom));left:12px;font-size:10px;color:#6cc;line-height:1.5;max-width:60vw;opacity:.8}
+#rec{color:#f33}
+.hide{display:none!important}
+body.pseudo-fs #bar{opacity:.85}
+@media (max-width:600px){#cam{width:96px;height:72px}#set{top:calc(92px + env(safe-area-inset-top));width:220px}#help{display:none}#title{font-size:12px}}
+</style>
+<script type="importmap">
+{"imports":{
+ "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+ "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="vig"></div><div id="scan"></div><div id="glitch"></div>
+<div class="hud" id="title">NEON//PARTICLES</div>
+<div class="hud" id="stat">FPS <b id="sFps">--</b> · 粒子 <b id="sCnt">--</b><br>手势 <b id="sHand">初始化…</b><br>场景 <b id="sScene">--</b> <span id="rec"></span></div>
+<div class="hud panel" id="cam"><canvas id="camc" width="160" height="120"></canvas><div id="camlbl">CAM OFFLINE</div></div>
+<div class="hud" id="help">✋张开=扩散 ✊握拳=聚拢 ☝食指=移动 🤏捏合=抓取<br>双手=缩放/旋转 ↔挥手=切场景 ✌=换色 👍=截图 ✊1秒=爆炸<br>无摄像头：拖动=移动 双指/滚轮=缩放</div>
+<div class="hud" id="toast"></div>
+<div class="hud panel" id="bar">
+ <input type="color" id="color" value="#00f0ff" title="粒子颜色">
+ <select id="scene">
+  <option value="plane">飞机</option><option value="galaxy">银河系</option><option value="towers">Bologna 双塔</option>
+  <option value="tsien">TSIEN</option><option value="text">自定义文字</option><option value="photo">照片</option><option value="gltf">glTF 模型</option>
+ </select>
+ <button id="bCam" title="切换前/后摄像头">⟲镜头</button>
+ <button id="bShot" title="截图">📷</button>
+ <button id="bRec" title="录屏 5 秒">⏺录</button>
+ <button id="bSet">⚙️设置</button>
+ <button id="bFs">⛶全屏</button>
+</div>
+<div class="hud panel" id="set">
+ <h3>// SETTINGS</h3>
+ <label>粒子数量 <span id="vCount"></span></label><input type="range" id="count" min="2000" step="1000">
+ <label>发光强度 <span id="vGlow"></span></label><input type="range" id="glow" min="0" max="3" step="0.05">
+ <label>拖尾长度 <span id="vTrail"></span></label><input type="range" id="trail" min="0" max="0.97" step="0.01">
+ <label>力场强度 <span id="vForce"></span></label><input type="range" id="force" min="0" max="3" step="0.05">
+ <div class="row"><button id="fRepel">排斥</button><button id="fAttract">吸引</button></div>
+ <label>平滑度 <span id="vSmooth"></span></label><input type="range" id="smooth" min="0" max="1" step="0.05">
+ <label><input type="checkbox" id="auto"> 自动降画质保帧率</label>
+ <label>渐变配色</label><div class="row" id="pals"></div>
+ <label>粒子文字</label><input type="text" id="txt" maxlength="24" placeholder="输入文字回车"><div class="row"><button id="bTxt">生成</button></div>
+ <label>上传</label><div class="row">
+  <button id="bPhoto">照片</button><button id="bModel">glTF/GLB</button><button id="bSong">歌曲</button><button id="bMic">🎤麦克风</button>
+ </div>
+ <input type="file" id="fPhoto" accept="image/*" class="hide"><input type="file" id="fModel" accept=".glb,.gltf" class="hide"><input type="file" id="fSong" accept="audio/*" class="hide">
+ <div class="row"><button id="bReset">恢复默认</button></div>
+</div>
+<video id="vid" playsinline muted autoplay class="hide"></video>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { AfterimagePass } from 'three/addons/postprocessing/AfterimagePass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshSurfaceSampler } from 'three/addons/math/MeshSurfaceSampler.js';
+
+const $ = id => document.getElementById(id);
+const IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (matchMedia('(pointer:coarse)').matches && innerWidth < 1000);
+const MAX_COUNT = IS_MOBILE ? 100000 : 200000;
+
+// ===== 配色预设（A→B 渐变）=====
+const PALETTES = [
+  { n:'霓虹', a:'#00f0ff', b:'#ff2bd6' }, { n:'酸性', a:'#b6ff00', b:'#00ffa2' },
+  { n:'熔岩', a:'#ff5a00', b:'#ff0055' }, { n:'极光', a:'#7a5cff', b:'#00ffd5' },
+  { n:'黄金', a:'#ffd000', b:'#ff2bd6' }, { n:'冰', a:'#ffffff', b:'#00a2ff' },
+];
+
+// ===== 设置（localStorage 持久化）=====
+const KEY = 'handParticles.settings.v2';
+const DEF = { count: IS_MOBILE ? 20000 : 50000, glow: 1.2, trail: 0.75, force: 1.2, attract: false, smooth: 0.5, auto: true, pal: 0, color: '#00f0ff', scene: 'plane' };
+let S = Object.assign({}, DEF, JSON.parse(localStorage.getItem(KEY) || '{}'));
+S.count = Math.min(S.count, MAX_COUNT);
+const save = () => localStorage.setItem(KEY, JSON.stringify(S));
+
+// ===== 渲染器 / 后期 =====
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, IS_MOBILE ? 1.5 : 2)); // 限制 DPR 保性能
+renderer.setClearColor(0x000000, 1);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+camera.position.set(0, 0, 9);
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const afterimage = new AfterimagePass(S.trail); composer.addPass(afterimage);          // 运动拖尾
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 1, 0.6, 0.0); composer.addPass(bloom); // 辉光
+composer.addPass(new OutputPass());
+
+// 背景网格地面（赛博感）
+const grid = new THREE.GridHelper(60, 60, 0xff2bd6, 0x003a44);
+grid.position.y = -4.5; grid.material.transparent = true; grid.material.opacity = 0.35; scene.add(grid);
+
+// ===== 粒子：GPU 着色器驱动 =====
+const swarm = new THREE.Group(); scene.add(swarm);
+const uniforms = {
+  uTime: { value: 0 }, uMorph: { value: 1 }, uSpread: { value: 0 }, uExplode: { value: 0 },
+  uForcePt: { value: new THREE.Vector3(999, 999, 999) }, uForce: { value: 0 }, uSpin: { value: 0 },
+  uColA: { value: new THREE.Color(S.color) }, uColB: { value: new THREE.Color(PALETTES[S.pal].b) },
+  uUseCol: { value: 0 }, uSize: { value: IS_MOBILE ? 3.0 : 2.4 }, uPR: { value: renderer.getPixelRatio() },
+  uBeat: { value: 0 }, uGlow: { value: S.glow },
+};
+const vert = /* glsl */`
+attribute vec3 aFrom; attribute vec3 aTo; attribute vec4 aRnd; attribute vec3 aCol;
+uniform float uTime,uMorph,uSpread,uExplode,uForce,uSpin,uSize,uPR,uBeat;
+uniform vec3 uForcePt;
+varying vec3 vCol; varying float vA; varying float vT;
+// 快速哈希噪声用于扩散方向
+vec3 h3(vec4 r){ return normalize(vec3(r.x-.5,r.y-.5,r.z-.5)+1e-4); }
+void main(){
+  // 每个粒子有不同延迟，形成流动的变形
+  float d = aRnd.w*0.5;
+  float m = smoothstep(d, d+0.5, uMorph);
+  vec3 p = mix(aFrom, aTo, m);
+  // 变形途中向外弧形飞散
+  p += h3(aRnd) * sin(m*3.14159) * 1.2;
+  // 银河自转：越靠里转得越快
+  if(uSpin>0.5){ float r=length(p.xz); float a=uTime*0.25/(0.4+r*0.3); float c=cos(a),s=sin(a); p.xz=mat2(c,-s,s,c)*p.xz; }
+  // 手张开 → 扩散；轻微呼吸噪声
+  vec3 dir = h3(aRnd);
+  p += dir * uSpread * (0.6 + aRnd.x*1.8);
+  p += 0.03*vec3(sin(uTime*1.7+aRnd.y*30.), cos(uTime*1.3+aRnd.z*30.), sin(uTime+aRnd.x*30.));
+  // 爆炸成星尘
+  p += dir * uExplode * (3.0 + aRnd.y*9.0);
+  // 音乐节拍脉冲
+  p *= 1.0 + uBeat*0.18*(0.5+aRnd.x);
+  // 手势力场：排斥(+)/吸引(-)
+  vec3 fd = p - uForcePt; float fl = length(fd);
+  float fall = exp(-fl*fl*0.9);
+  p += normalize(fd+1e-4) * uForce * fall * 1.6;
+  vec4 mv = modelViewMatrix * vec4(p,1.0);
+  gl_Position = projectionMatrix * mv;
+  gl_PointSize = uSize * uPR * (0.6+aRnd.z*0.9) * (8.0 / -mv.z) * (1.0+uBeat*0.6);
+  vCol = aCol; vT = aRnd.x; vA = 0.55 + 0.45*fall*step(0.01,abs(uForce));
+}`;
+const frag = /* glsl */`
+uniform vec3 uColA,uColB; uniform float uUseCol,uGlow,uBeat;
+varying vec3 vCol; varying float vA; varying float vT;
+void main(){
+  vec2 c = gl_PointCoord-0.5; float r = length(c);
+  if(r>0.5) discard;
+  float core = exp(-r*r*40.0);           // 软圆点精灵
+  float halo = exp(-r*r*10.0)*0.5;
+  vec3 col = mix(mix(uColA,uColB,vT), vCol, uUseCol);
+  float a = (core*0.7 + halo*uGlow*0.6) * vA;
+  gl_FragColor = vec4(col*(0.6+uGlow*0.5+uBeat), a);
+}`;
+const mat = new THREE.ShaderMaterial({ uniforms, vertexShader: vert, fragmentShader: frag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+let geo, points, N = 0;
+let curTarget = null, curColors = null;
+
+function buildGeometry(n) {
+  N = n;
+  if (points) { swarm.remove(points); geo.dispose(); }
+  geo = new THREE.BufferGeometry();
+  const rnd = new Float32Array(n * 4); for (let i = 0; i < rnd.length; i++) rnd[i] = Math.random();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3)); // 占位，实际位置由 aFrom/aTo 计算
+  geo.setAttribute('aFrom', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute('aTo', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute('aCol', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute('aRnd', new THREE.BufferAttribute(rnd, 4));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 50);
+  points = new THREE.Points(geo, mat); points.frustumCulled = false; swarm.add(points);
+  $('sCnt').textContent = n.toLocaleString();
+}
+
+// ===== 形状生成（返回 n*3 坐标）=====
+const R = Math.random, gauss = () => (R() + R() + R() - 1.5) / 1.5;
+function shapePlane(n) {
+  const o = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    let x, y, z, k = R();
+    if (k < 0.38) { // 机身：拉长椭球 + 尖鼻
+      const t = R() * 2 - 1, a = R() * 6.283, rr = 0.42 * Math.sqrt(1 - t * t * (t > 0 ? 0.9 : 0.6));
+      x = t * 3.6; y = Math.cos(a) * rr; z = Math.sin(a) * rr;
+    } else if (k < 0.75) { // 主翼：后掠梯形
+      const s = R() * 2 - 1, span = Math.abs(s); const chord = 1.3 - span * 0.8;
+      x = 0.4 - span * 1.1 - R() * chord; z = s * 3.9; y = -0.08 + (R() - .5) * 0.08 + span * 0.25;
+    } else if (k < 0.88) { // 水平尾翼
+      const s = R() * 2 - 1, span = Math.abs(s);
+      x = -2.9 - span * 0.5 - R() * (0.6 - span * 0.3); z = s * 1.4; y = 0.05 + (R() - .5) * 0.05;
+    } else if (k < 0.95) { // 垂直尾翼
+      const h = R(); x = -2.8 - h * 0.7 - R() * (0.8 - h * 0.45); y = 0.3 + h * 1.3; z = (R() - .5) * 0.06;
+    } else { // 两个发动机
+      const t = R(), a = R() * 6.283, side = R() < .5 ? -1 : 1;
+      x = 0.6 - t * 1.0; y = -0.45 + Math.cos(a) * 0.18; z = side * 1.6 + Math.sin(a) * 0.18;
+    }
+    o[i * 3] = x; o[i * 3 + 1] = y; o[i * 3 + 2] = z;
+  }
+  return o;
+}
+function shapeGalaxy(n) {
+  const o = new Float32Array(n * 3), arms = 4;
+  for (let i = 0; i < n; i++) {
+    let x, y, z;
+    if (R() < 0.15) { // 核球
+      const r = Math.abs(gauss()) * 0.9, a = R() * 6.283, b = Math.acos(R() * 2 - 1);
+      x = r * Math.sin(b) * Math.cos(a); y = r * Math.cos(b) * 0.6; z = r * Math.sin(b) * Math.sin(a);
+    } else { // 对数旋臂
+      const r = 0.4 + Math.pow(R(), 0.7) * 5.2, arm = (i % arms) / arms * 6.283;
+      const a = arm + r * 0.9 + gauss() * 0.35 / (0.3 + r * 0.15);
+      x = Math.cos(a) * r + gauss() * 0.15; z = Math.sin(a) * r + gauss() * 0.15; y = gauss() * 0.12 * (1.5 - r / 6);
+    }
+    o[i * 3] = x; o[i * 3 + 1] = y; o[i * 3 + 2] = z;
+  }
+  return o;
+}
+function shapeTowers(n) {
+  // Asinelli 高约 97m，Garisenda 约 48m 且明显倾斜；按比例缩放
+  const o = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const tall = R() < 0.62; const H = tall ? 7.2 : 3.6, W = tall ? 0.62 : 0.72;
+    const cx = tall ? -0.75 : 0.75, lean = tall ? 0.025 : 0.13;
+    let h = R() * H, x, z;
+    if (tall && R() < 0.06) { h = H + R() * 0.5; } // 塔顶小亭
+    const w = (tall && h > H) ? W * 0.55 : W * (1 - h / H * 0.12);
+    const f = Math.floor(R() * 4), t = R() * 2 - 1;  // 四个立面
+    if (f === 0) { x = t * w; z = w; } else if (f === 1) { x = t * w; z = -w; } else if (f === 2) { x = w; z = t * w; } else { x = -w; z = t * w; }
+    if (R() < 0.12) { x = (R() * 2 - 1) * w; z = (R() * 2 - 1) * w; h = Math.round(h / 0.9) * 0.9; } // 楼层环
+    o[i * 3] = cx + x + h * lean; o[i * 3 + 1] = h - 3.8; o[i * 3 + 2] = z;
+  }
+  return o;
+}
+// 文字 → 粒子：画到离屏 canvas，采样填充像素并挤出厚度
+function shapeText(n, text, bold = true) {
+  const cv = document.createElement('canvas'), W = 1024, H = 256; cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'); let fs = 200;
+  g.font = `900 ${fs}px Orbitron, Arial Black, sans-serif`;
+  while (g.measureText(text).width > W * 0.92 && fs > 20) { fs -= 8; g.font = `900 ${fs}px Orbitron, Arial Black, sans-serif`; }
+  g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, W / 2, H / 2);
+  if (bold) { g.lineWidth = fs * 0.06; g.strokeStyle = '#fff'; g.strokeText(text, W / 2, H / 2); }
+  const d = g.getImageData(0, 0, W, H).data, pix = [];
+  for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) if (d[(y * W + x) * 4 + 3] > 128) pix.push(x, y);
+  const o = new Float32Array(n * 3), m = pix.length / 2 || 1, sc = 9 / W;
+  for (let i = 0; i < n; i++) {
+    const j = (Math.random() * m | 0) * 2;
+    o[i * 3] = ((pix[j] || W / 2) - W / 2 + R() * 2) * sc; o[i * 3 + 1] = -((pix[j + 1] || H / 2) - H / 2 + R() * 2) * sc; o[i * 3 + 2] = (R() - .5) * 0.7;
+  }
+  return o;
+}
+// 照片 → 粒子：按亮度挤出 z，颜色取像素
+function shapePhoto(n, img) {
+  const cv = document.createElement('canvas'), mx = 220, k = Math.min(mx / img.width, mx / img.height);
+  const W = Math.max(1, img.width * k | 0), H = Math.max(1, img.height * k | 0); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'); g.drawImage(img, 0, 0, W, H); const d = g.getImageData(0, 0, W, H).data;
+  const o = new Float32Array(n * 3), c = new Float32Array(n * 3), sc = 8 / Math.max(W, H);
+  for (let i = 0; i < n; i++) {
+    const x = R() * W, y = R() * H, p = ((y | 0) * W + (x | 0)) * 4, l = (d[p] + d[p + 1] + d[p + 2]) / 765;
+    o[i * 3] = (x - W / 2) * sc; o[i * 3 + 1] = -(y - H / 2) * sc; o[i * 3 + 2] = l * 0.8;
+    c[i * 3] = d[p] / 255; c[i * 3 + 1] = d[p + 1] / 255; c[i * 3 + 2] = d[p + 2] / 255;
+  }
+  return { pos: o, col: c };
+}
+// glTF → 粒子：MeshSurfaceSampler 按面积采样所有网格表面
+function shapeModel(n, root) {
+  const meshes = []; root.updateMatrixWorld(true);
+  root.traverse(o => { if (o.isMesh) meshes.push(o); });
+  const o = new Float32Array(n * 3), c = new Float32Array(n * 3); if (!meshes.length) return null;
+  const v = new THREE.Vector3(), col = new THREE.Color(), box = new THREE.Box3().setFromObject(root);
+  const ctr = box.getCenter(new THREE.Vector3()), sc = 7 / Math.max(...box.getSize(new THREE.Vector3()).toArray(), 1e-3);
+  const samplers = meshes.map(m => new MeshSurfaceSampler(m).build());
+  for (let i = 0; i < n; i++) {
+    const k = i % meshes.length; samplers[k].sample(v, null, col);
+    v.applyMatrix4(meshes[k].matrixWorld).sub(ctr).multiplyScalar(sc);
+    o[i * 3] = v.x; o[i * 3 + 1] = v.y; o[i * 3 + 2] = v.z;
+  }
+  return { pos: o, col: c };
+}
+
+let modelRoot = null, photoImg = null, customText = '赛博 2077';
+const SCENE_NAMES = { plane: '飞机', galaxy: '银河系', towers: 'Bologna 双塔', tsien: 'TSIEN', text: '自定义文字', photo: '照片', gltf: 'glTF 模型' };
+const ORDER = ['plane', 'galaxy', 'towers', 'tsien', 'text'];
+function makeTarget(name, n) {
+  switch (name) {
+    case 'galaxy': return { pos: shapeGalaxy(n) };
+    case 'towers': return { pos: shapeTowers(n) };
+    case 'tsien': return { pos: shapeText(n, 'Tsien') };
+    case 'text': return { pos: shapeText(n, customText) };
+    case 'photo': return photoImg ? shapePhoto(n, photoImg) : null;
+    case 'gltf': return modelRoot ? shapeModel(n, modelRoot) : null;
+    default: return { pos: shapePlane(n) };
+  }
+}
+// 切换场景：当前目标 → 新目标 平滑变形
+let morphT = 1;
+function setScene(name, instant = false) {
+  if (name === 'photo' && !photoImg) { $('fPhoto').click(); $('scene').value = S.scene; return; }
+  if (name === 'gltf' && !modelRoot) { $('fModel').click(); $('scene').value = S.scene; return; }
+  const t = makeTarget(name, N); if (!t) return;
+  const from = geo.attributes.aFrom.array, to = geo.attributes.aTo.array;
+  if (curTarget && !instant) from.set(curTarget); else from.set(t.pos);
+  to.set(t.pos); curTarget = t.pos;
+  if (t.col) { geo.attributes.aCol.array.set(t.col); uniforms.uUseCol.value = name === 'photo' ? 1 : 0; } else uniforms.uUseCol.value = 0;
+  geo.attributes.aFrom.needsUpdate = geo.attributes.aTo.needsUpdate = geo.attributes.aCol.needsUpdate = true;
+  morphT = instant ? 1 : 0;
+  uniforms.uSpin.value = name === 'galaxy' ? 1 : 0;
+  S.scene = name; save(); $('scene').value = name; $('sScene').textContent = SCENE_NAMES[name];
+  if (name === 'galaxy') swarm.rotation.set(0.5, 0, 0); else if (!instant) swarm.rotation.set(0, 0, 0);
+  glitch(); toast(SCENE_NAMES[name]);
+}
+function rebuild(n) { buildGeometry(n); curTarget = null; setScene(S.scene, true); }
+
+// ===== HUD 工具 =====
+let toastT;
+function toast(s) { const t = $('toast'); t.textContent = s; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 1100); }
+function glitch() { const g = $('glitch'); g.classList.remove('on'); void g.offsetWidth; g.classList.add('on'); }
+
+// ===== One Euro 滤波器：低速强平滑、高速低延迟 =====
+class OneEuro {
+  constructor(minCut = 1, beta = 0.02, dCut = 1) { this.minCut = minCut; this.beta = beta; this.dCut = dCut; this.x = null; this.dx = 0; this.t = 0; }
+  a(cut, dt) { const tau = 1 / (2 * Math.PI * cut); return 1 / (1 + tau / dt); }
+  f(x, t) {
+    if (this.x === null) { this.x = x; this.t = t; return x; }
+    const dt = Math.max(1e-3, t - this.t); this.t = t;
+    const dx = (x - this.x) / dt; this.dx += this.a(this.dCut, dt) * (dx - this.dx);
+    const cut = this.minCut + this.beta * Math.abs(this.dx); this.x += this.a(cut, dt) * (x - this.x); return this.x;
+  }
+}
+const filt = {}; const F = (k, v, t) => { if (!filt[k]) filt[k] = new OneEuro(); const s = 1 - S.smooth; filt[k].minCut = 0.3 + s * 4; filt[k].beta = 0.005 + s * 0.08; return filt[k].f(v, t); };
+
+// ===== 控制状态（手势 / 触控共用）=====
+const ctl = { scale: 1, tScale: 1, spread: 0, tSpread: 0, ox: 0, oy: 0, tx: 0, ty: 0, rotX: 0, rotY: 0, tRotX: 0, tRotY: 0, force: 0, fx: 999, fy: 999, explode: 0 };
+let handActive = false;
+
+// ===== 摄像头 + MediaPipe HandLandmarker =====
+const video = $('vid'), camc = $('camc'), cg = camc.getContext('2d');
+let landmarker = null, facing = 'user', stream = null, lastVT = -1, hands = [];
+async function startCamera() {
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error('浏览器不支持摄像头（需 https）');
+    stream?.getTracks().forEach(t => t.stop());
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+    video.srcObject = stream; await video.play();
+    $('camlbl').textContent = facing === 'user' ? 'FRONT CAM' : 'REAR CAM';
+    if (!landmarker) await loadLandmarker();
+  } catch (e) {
+    console.warn('[camera] 不可用，切换为触控模式：', e.message || e);
+    $('sHand').textContent = '无摄像头·触控模式'; $('camlbl').textContent = 'CAM OFFLINE';
+  }
+}
+async function loadLandmarker() {
+  $('sHand').textContent = '加载手势模型…';
+  const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+  const { FilesetResolver, HandLandmarker } = await import(V + '/vision_bundle.mjs');
+  const fs = await FilesetResolver.forVisionTasks(V + '/wasm');
+  const opts = (d) => ({ baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate: d }, runningMode: 'VIDEO', numHands: 2 });
+  try { landmarker = await HandLandmarker.createFromOptions(fs, opts('GPU')); } catch { landmarker = await HandLandmarker.createFromOptions(fs, opts('CPU')); }
+  $('sHand').textContent = '等待手…';
+}
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, (a.z - b.z) * 0.5);
+// 手指是否伸直：指尖离手腕比 PIP 关节远
+const ext = (L, tip, pip) => dist(L[tip], L[0]) > dist(L[pip], L[0]) * 1.12;
+const ges = { pinch: false, grabOff: null, fistT: 0, peaceT: 0, thumbT: 0, lastSwipe: 0, hist: [], twoRef: null };
+function processHands(res, now) {
+  const t = now / 1000; hands = res.landmarks || [];
+  drawPreview();
+  if (!hands.length) { handActive = false; $('sHand').textContent = '等待手…'; ctl.force = 0; ges.twoRef = null; return; }
+  handActive = true;
+  const mir = facing === 'user' ? -1 : 1; // 前置镜像
+  const toX = x => (x - 0.5) * 2 * mir, toY = y => -(y - 0.5) * 2;
+  const L = hands[0];
+  const palm = dist(L[0], L[9]) || 1e-3;
+  // 张开程度：五指尖到手腕平均距离 / 手掌长，连续映射 0..1
+  const openRaw = [4, 8, 12, 16, 20].reduce((s, i) => s + dist(L[i], L[0]), 0) / 5 / palm;
+  const open = Math.min(1, Math.max(0, (F('open', openRaw, t) - 0.9) / 1.0));
+  const ix = F('ix', toX(L[8].x), t), iy = F('iy', toY(L[8].y), t);
+  const pinchD = dist(L[4], L[8]) / palm;
+  const fist = open < 0.12;
+  const peace = ext(L, 8, 6) && ext(L, 12, 10) && !ext(L, 16, 14) && !ext(L, 20, 18);
+  const thumb = !ext(L, 8, 6) && !ext(L, 12, 10) && !ext(L, 16, 14) && L[4].y < L[3].y && L[4].y < L[5].y - palm * 0.6;
+  let label = `张开 ${(open * 100 | 0)}%`;
+
+  if (hands.length >= 2) {
+    // 双手：距离 → 缩放，相对角度 → 旋转
+    const A = hands[0][9], B = hands[1][9];
+    const d = Math.hypot(A.x - B.x, A.y - B.y), ang = Math.atan2((B.y - A.y), (B.x - A.x) * mir), dz = (A.z - B.z);
+    if (!ges.twoRef) ges.twoRef = { d, ang, dz, s: ctl.tScale, ry: ctl.tRotY, rx: ctl.tRotX };
+    ctl.tScale = Math.min(3, Math.max(0.3, ges.twoRef.s * d / ges.twoRef.d));
+    ctl.tRotY = ges.twoRef.ry + (ang - ges.twoRef.ang) * 2;
+    ctl.tRotX = ges.twoRef.rx + (((A.y + B.y) / 2) - 0.5) * 2;
+    label = '双手 缩放/旋转'; ctl.force = 0;
+  } else {
+    ges.twoRef = null;
+    ctl.tSpread = open * 2.2; ctl.tScale = 0.55 + open * 0.75;
+    // 捏合：抓住并拖动粒子群
+    if (pinchD < 0.35) {
+      const px = toX((L[4].x + L[8].x) / 2) * 4.5, py = toY((L[4].y + L[8].y) / 2) * 3.2;
+      if (!ges.pinch) { ges.pinch = true; ges.grabOff = [ctl.tx - px, ctl.ty - py]; }
+      ctl.tx = px + ges.grabOff[0]; ctl.ty = py + ges.grabOff[1]; label = '🤏 抓取'; ctl.force = 0;
+    } else {
+      if (ges.pinch && pinchD > 0.5) { ges.pinch = false; toast('释放'); }
+      if (!ges.pinch) { ctl.tx = ix * 3.2; ctl.ty = iy * 2.2; }
+      // 力场跟随食指尖
+      ctl.fx = ix * 4.5; ctl.fy = iy * 3.2; ctl.force = S.force * (S.attract ? -1 : 1);
+    }
+    // 握拳 >1 秒 → 爆炸
+    if (fist) { if (!ges.fistT) ges.fistT = now; else if (now - ges.fistT > 1000 && ctl.explode < 0.1) { explode(); ges.fistT = now + 3000; } label = '✊ 握拳'; } else ges.fistT = 0;
+    // ✌ 换色（保持 400ms 防误触）
+    if (peace) { if (!ges.peaceT) ges.peaceT = now; else if (now - ges.peaceT > 400) { nextPalette(); ges.peaceT = now + 1500; } label = '✌ 换色'; } else ges.peaceT = 0;
+    if (thumb) { if (!ges.thumbT) ges.thumbT = now; else if (now - ges.thumbT > 600) { screenshot(); ges.thumbT = now + 2500; } label = '👍 截图'; } else ges.thumbT = 0;
+    // 挥手：手腕 300ms 内水平位移大
+    const wx = toX(L[0].x); ges.hist.push([now, wx]); while (ges.hist.length && now - ges.hist[0][0] > 300) ges.hist.shift();
+    const dx = wx - ges.hist[0][1];
+    if (Math.abs(dx) > 0.9 && now - ges.lastSwipe > 1200 && !ges.pinch && open > 0.4) {
+      ges.lastSwipe = now; ges.hist = [];
+      const i = ORDER.indexOf(S.scene), nx = ORDER[(Math.max(0, i) + (dx > 0 ? 1 : ORDER.length - 1)) % ORDER.length];
+      setScene(nx); label = dx > 0 ? '→ 挥手' : '← 挥手';
+    }
+  }
+  $('sHand').textContent = label;
+}
+const BONES = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+function drawPreview() {
+  const W = camc.width, H = camc.height; cg.save(); cg.clearRect(0, 0, W, H);
+  if (facing === 'user') { cg.translate(W, 0); cg.scale(-1, 1); }
+  if (video.readyState >= 2) { cg.globalAlpha = 0.55; cg.drawImage(video, 0, 0, W, H); cg.globalAlpha = 1; }
+  cg.lineWidth = 1.5;
+  hands.forEach((L, h) => {
+    cg.strokeStyle = h ? '#ff2bd6' : '#00f0ff'; cg.shadowColor = cg.strokeStyle; cg.shadowBlur = 6;
+    cg.beginPath(); BONES.forEach(([a, b]) => { cg.moveTo(L[a].x * W, L[a].y * H); cg.lineTo(L[b].x * W, L[b].y * H); }); cg.stroke();
+    cg.fillStyle = '#f5ff3b'; L.forEach(p => cg.fillRect(p.x * W - 1, p.y * H - 1, 2, 2));
+  });
+  cg.restore();
+}
+function explode() { ctl.explode = 1; ges.boom = performance.now(); toast('BOOM // 星尘'); glitch(); }
+
+// ===== 触控 / 鼠标后备：拖动=移动，双指/滚轮=缩放，双指旋转=旋转 =====
+const ptrs = new Map(); let pinchRef = null;
+canvas.addEventListener('pointerdown', e => { ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', e => {
+  if (!ptrs.has(e.pointerId)) { if (!handActive && e.pointerType === 'mouse') { ctl.fx = (e.clientX / innerWidth - .5) * 9; ctl.fy = -(e.clientY / innerHeight - .5) * 6.4; ctl.force = S.force * (S.attract ? -1 : 1); } return; }
+  const p = ptrs.get(e.pointerId), dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+  if (handActive) return;
+  if (ptrs.size === 1) {
+    if (e.shiftKey || e.buttons === 2) { ctl.tRotY += dx * 0.01; ctl.tRotX += dy * 0.01; }
+    else { ctl.tx += dx / innerWidth * 9; ctl.ty -= dy / innerHeight * 6.4; }
+    ctl.fx = (e.clientX / innerWidth - .5) * 9; ctl.fy = -(e.clientY / innerHeight - .5) * 6.4; ctl.force = S.force * (S.attract ? -1 : 1);
+  } else if (ptrs.size === 2) {
+    const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y), ang = Math.atan2(b.y - a.y, b.x - a.x);
+    if (!pinchRef) pinchRef = { d, ang, s: ctl.tScale, sp: ctl.tSpread, r: ctl.tRotY };
+    const k = d / pinchRef.d; ctl.tScale = Math.min(3, Math.max(0.3, pinchRef.s * k)); ctl.tSpread = Math.max(0, Math.min(2.5, pinchRef.sp + (k - 1) * 1.5));
+    ctl.tRotY = pinchRef.r + (ang - pinchRef.ang);
+  }
+});
+const up = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchRef = null; if (!ptrs.size && !handActive && e.pointerType !== 'mouse') ctl.force = 0; };
+canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+canvas.addEventListener('pointerleave', () => { if (!handActive) ctl.force = 0; });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('wheel', e => { e.preventDefault(); ctl.tScale = Math.min(3, Math.max(0.3, ctl.tScale * Math.exp(-e.deltaY * 0.001))); }, { passive: false });
+canvas.addEventListener('dblclick', explode);
+
+// ===== 音频：麦克风或上传歌曲，分析低频能量做节拍脉冲 =====
+let actx, analyser, fbuf, audioEl, beatAvg = 0;
+function initAudio(src) {
+  actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume();
+  analyser = analyser || Object.assign(actx.createAnalyser(), { fftSize: 512, smoothingTimeConstant: 0.6 });
+  fbuf = new Uint8Array(analyser.frequencyBinCount); src.connect(analyser);
+}
+function audioBeat() {
+  if (!analyser) return 0; analyser.getByteFrequencyData(fbuf);
+  let e = 0; for (let i = 1; i < 12; i++) e += fbuf[i]; e /= 11 * 255;
+  beatAvg = beatAvg * 0.95 + e * 0.05;
+  return Math.max(0, (e - beatAvg * 1.15)) * 4;
+}
+$('bMic').onclick = async () => {
+  try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); initAudio((actx || (actx = new AudioContext())).createMediaStreamSource(s)); toast('🎤 音频联动'); }
+  catch (e) { toast('麦克风不可用'); }
+};
+$('bSong').onclick = () => $('fSong').click();
+$('fSong').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  if (!audioEl) { audioEl = new Audio(); audioEl.loop = true; initAudio((actx = new (window.AudioContext || window.webkitAudioContext)()).createMediaElementSource(audioEl)); analyser.connect(actx.destination); }
+  audioEl.src = URL.createObjectURL(f); audioEl.play(); toast('♪ ' + f.name.slice(0, 16));
+};
+
+// ===== 截图 / 录屏 =====
+const stamp = () => new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+function download(url, name) { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
+function screenshot() { composer.render(); download(canvas.toDataURL('image/png'), `neon-particles-${stamp()}.png`); toast('📷 已截图'); glitch(); }
+let recorder;
+function record(sec = 5) {
+  if (recorder?.state === 'recording') { recorder.stop(); return; }
+  if (!canvas.captureStream || !window.MediaRecorder) { toast('此浏览器不支持录屏'); return; }
+  const mime = ['video/webm;codecs=vp9', 'video/webm', 'video/mp4'].find(m => MediaRecorder.isTypeSupported(m)) || '';
+  const chunks = []; recorder = new MediaRecorder(canvas.captureStream(30), mime ? { mimeType: mime, videoBitsPerSecond: 6e6 } : {});
+  recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+  recorder.onstop = () => { $('rec').textContent = ''; $('bRec').classList.remove('act'); const b = new Blob(chunks, { type: recorder.mimeType }); download(URL.createObjectURL(b), `neon-particles-${stamp()}.${b.type.includes('mp4') ? 'mp4' : 'webm'}`); toast('⏺ 视频已保存'); };
+  recorder.start(); $('bRec').classList.add('act'); $('rec').textContent = '● REC'; setTimeout(() => recorder.state === 'recording' && recorder.stop(), sec * 1000);
+}
+
+// ===== 全屏（iOS 不支持 Fullscreen API 时用伪全屏）=====
+function toggleFs() {
+  const el = document.documentElement;
+  if (el.requestFullscreen || el.webkitRequestFullscreen) {
+    if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else (el.requestFullscreen || el.webkitRequestFullscreen).call(el).catch?.(() => document.body.classList.toggle('pseudo-fs'));
+  } else { document.body.classList.toggle('pseudo-fs'); scrollTo(0, 1); toast('伪全屏：可“添加到主屏幕”'); }
+  $('bFs').classList.toggle('act');
+}
+
+// ===== UI 绑定 =====
+function applySettings() {
+  afterimage.uniforms.damp.value = S.trail;
+  uniforms.uGlow.value = S.glow; bloom.strength = S.glow * (quality.bloom ? 1 : 0);
+  $('vCount').textContent = S.count.toLocaleString(); $('vGlow').textContent = S.glow.toFixed(2); $('vTrail').textContent = S.trail.toFixed(2);
+  $('vForce').textContent = S.force.toFixed(2); $('vSmooth').textContent = S.smooth.toFixed(2);
+  $('fRepel').classList.toggle('act', !S.attract); $('fAttract').classList.toggle('act', S.attract);
+  [...$('pals').children].forEach((b, i) => b.classList.toggle('act', i === S.pal));
+  save();
+}
+function setPalette(i) { S.pal = i; S.color = PALETTES[i].a; uniforms.uColA.value.set(S.color); uniforms.uColB.value.set(PALETTES[i].b); $('color').value = S.color; applySettings(); }
+function nextPalette() { setPalette((S.pal + 1) % PALETTES.length); toast('✌ ' + PALETTES[S.pal].n); glitch(); }
+PALETTES.forEach((p, i) => { const b = document.createElement('button'); b.textContent = p.n; b.style.borderImage = `linear-gradient(90deg,${p.a},${p.b}) 1`; b.onclick = () => setPalette(i); $('pals').appendChild(b); });
+const rng = (id, k, cb) => { const el = $(id); el.value = S[k]; el.oninput = () => { S[k] = +el.value; applySettings(); cb?.(); }; };
+$('count').max = MAX_COUNT;
+rng('count', 'count'); $('count').onchange = () => { quality.level = 1; rebuild(S.count); };
+rng('glow', 'glow'); rng('trail', 'trail'); rng('force', 'force'); rng('smooth', 'smooth');
+$('auto').checked = S.auto; $('auto').onchange = e => { S.auto = e.target.checked; save(); };
+$('fRepel').onclick = () => { S.attract = false; applySettings(); }; $('fAttract').onclick = () => { S.attract = true; applySettings(); };
+$('color').oninput = e => { S.color = e.target.value; uniforms.uColA.value.set(S.color); uniforms.uUseCol.value = 0; save(); };
+$('scene').onchange = e => setScene(e.target.value);
+$('bSet').onclick = () => { $('set').classList.toggle('open'); $('bSet').classList.toggle('act'); };
+$('bFs').onclick = toggleFs; $('bShot').onclick = screenshot; $('bRec').onclick = () => record(5);
+$('bCam').onclick = () => { facing = facing === 'user' ? 'environment' : 'user'; startCamera(); };
+const genText = () => { const v = $('txt').value.trim(); if (v) { customText = v; setScene('text'); } };
+$('bTxt').onclick = genText; $('txt').onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') genText(); };
+$('bPhoto').onclick = () => $('fPhoto').click(); $('bModel').onclick = () => $('fModel').click();
+$('fPhoto').onchange = e => { const f = e.target.files[0]; if (!f) return; const img = new Image(); img.onload = () => { photoImg = img; setScene('photo'); }; img.src = URL.createObjectURL(f); };
+$('fModel').onchange = e => {
+  const f = e.target.files[0]; if (!f) return; toast('解析模型…');
+  new GLTFLoader().load(URL.createObjectURL(f), g => { modelRoot = g.scene; setScene('gltf'); }, undefined, err => { console.warn(err); toast('模型加载失败（.gltf 请打包为 .glb）'); });
+};
+$('bReset').onclick = () => { localStorage.removeItem(KEY); S = Object.assign({}, DEF); ['count', 'glow', 'trail', 'force', 'smooth'].forEach(k => $(k).value = S[k]); $('auto').checked = S.auto; setPalette(S.pal); rebuild(S.count); };
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'arrowright' || k === 'arrowleft') { const i = ORDER.indexOf(S.scene); setScene(ORDER[(Math.max(0, i) + (k === 'arrowright' ? 1 : ORDER.length - 1)) % ORDER.length]); }
+  else if (k === 'f') toggleFs(); else if (k === 'p') screenshot(); else if (k === 'r') record(5); else if (k === 'c') nextPalette(); else if (k === ' ') explode(); else if (k === 's') $('bSet').click();
+});
+
+// ===== 自适应画质：FPS 低时先关辉光，再逐步减少可见粒子（drawRange）=====
+const quality = { level: 1, bloom: true, frames: 0, t0: performance.now(), fps: 60, low: 0 };
+if (IS_MOBILE) bloom.resolution.set(128, 128); // 移动端低分辨率辉光
+function adapt(now) {
+  quality.frames++;
+  if (now - quality.t0 < 1000) return;
+  quality.fps = quality.frames * 1000 / (now - quality.t0); quality.frames = 0; quality.t0 = now;
+  $('sFps').textContent = quality.fps | 0;
+  if (!S.auto || document.hidden) return;
+  if (quality.fps < 32) quality.low++; else quality.low = 0;
+  if (quality.low >= 2) {
+    quality.low = 0;
+    if (quality.bloom) { quality.bloom = false; applySettings(); toast('自动降画质：关辉光'); }
+    else if (quality.level > 0.2) { quality.level *= 0.75; toast('自动降画质：减少粒子'); }
+  } else if (quality.fps > 55 && quality.level < 1) quality.level = Math.min(1, quality.level * 1.1);
+  const vis = Math.floor(N * quality.level); geo.setDrawRange(0, vis); $('sCnt').textContent = vis.toLocaleString();
+}
+
+// ===== 尺寸自适应（横竖屏）=====
+function resize() {
+  const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); composer.setSize(w, h);
+  camera.aspect = w / h; camera.position.z = w < h ? 13 : 9; camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); addEventListener('orientationchange', () => setTimeout(resize, 200));
+
+// ===== 主循环 =====
+const clock = new THREE.Clock(); const inv = new THREE.Matrix4(); const fv = new THREE.Vector3();
+function loop(now) {
+  requestAnimationFrame(loop);
+  const rawDt = Math.min(clock.getDelta(), 0.3), dt = Math.min(rawDt, 0.05), k = 1 - Math.pow(0.001, dt);
+  uniforms.uTime.value += dt;
+  // 手势识别（每个新视频帧一次）
+  if (landmarker && video.readyState >= 2 && video.currentTime !== lastVT) { lastVT = video.currentTime; try { processHands(landmarker.detectForVideo(video, now), now); } catch (e) { console.warn(e); } }
+  else if (!landmarker && stream && now % 3 < 1) drawPreview();
+  // 变形进度
+  if (morphT < 1) morphT = Math.min(1, morphT + rawDt / 1.8); uniforms.uMorph.value = morphT;
+  // 爆炸后自动重组
+  if (ges.boom) { const e = (now - ges.boom) / 1000; ctl.explode = e < 0.25 ? e / 0.25 : Math.max(0, 1 - (e - 0.9) / 1.6); if (e > 2.5) ges.boom = 0; }
+  uniforms.uExplode.value += ((ges.boom ? ctl.explode : 0) - uniforms.uExplode.value) * (ges.boom ? 0.5 : k);
+  // 平滑跟随
+  ctl.scale += (ctl.tScale - ctl.scale) * k * 3; ctl.spread += (ctl.tSpread - ctl.spread) * k * 3;
+  ctl.ox += (ctl.tx - ctl.ox) * k * 3; ctl.oy += (ctl.ty - ctl.oy) * k * 3;
+  ctl.rotX += (ctl.tRotX - ctl.rotX) * k * 3; ctl.rotY += (ctl.tRotY - ctl.rotY) * k * 3;
+  swarm.position.set(ctl.ox, ctl.oy, 0); swarm.scale.setScalar(ctl.scale);
+  const baseX = S.scene === 'galaxy' ? 0.5 : 0;
+  swarm.rotation.x = baseX + ctl.rotX; swarm.rotation.y = ctl.rotY + (handActive || ptrs.size ? 0 : Math.sin(uniforms.uTime.value * 0.2) * 0.35);
+  uniforms.uSpread.value = ctl.spread;
+  // 力场点：世界坐标 → 粒子局部坐标
+  swarm.updateMatrixWorld(); inv.copy(swarm.matrixWorld).invert();
+  fv.set(ctl.fx, ctl.fy, 0).applyMatrix4(inv); uniforms.uForcePt.value.copy(fv);
+  uniforms.uForce.value += (ctl.force - uniforms.uForce.value) * k * 4;
+  uniforms.uBeat.value += (audioBeat() - uniforms.uBeat.value) * 0.5;
+  grid.position.z = (uniforms.uTime.value * 1.5) % 1; // 网格前移
+  adapt(now);
+  composer.render();
+}
+
+// ===== 启动 =====
+setPalette(S.pal); uniforms.uColA.value.set(S.color); $('color').value = S.color;
+resize(); buildGeometry(S.count); setScene(S.scene, true); applySettings();
+requestAnimationFrame(loop);
+startCamera();
+window.__app = { setScene, explode, S }; // 调试钩子
+</script>
+</body>
+</html>
